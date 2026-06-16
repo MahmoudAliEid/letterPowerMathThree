@@ -1,16 +1,3 @@
-/**
- * الخوارزمية الجديدة — المحرك الخماسي
- * New 5-Step Arabic Text Metrics Engine
- *
- * الخطوة 1: الترقيم من اليمين إلى اليسار (1، 2، 3…)
- * الخطوة 2: الوزن الموقعي = الموقع × 4
- * الخطوة 3: الوزن التراكمي لكل حرف = مجموع أوزانه الموقعية
- * الخطوة 4: الضرب التقاطعي = Σ(وزن موقعي × وزن تراكمي) لكل موقع
- * الخطوة 5: القسمة على N ثم الاختزال الرقمي المتكرر للرقم النهائي
- *
- * تُستخدم مكتبة Decimal.js لضمان الدقة العلمية الكاملة بدون أي تقريب.
- */
-
 import Decimal from 'decimal.js';
 import { normalizeArabicText, removeDiacritics } from './rules';
 import { digitalRoot, ReductionResult } from './reduce';
@@ -24,49 +11,35 @@ Decimal.set({ precision: 100, rounding: Decimal.ROUND_HALF_UP });
 // Interfaces
 // ─────────────────────────────────────────────────────────────
 
-/** Step 1+2: Each letter with its positional index and weight */
 export interface LetterEntry {
-  char: string;          // The normalized character
-  index: number;         // 1-based position from right
-  positionalWeight: number; // index × 4
-}
-
-/** Step 3: Cumulative weight for each unique character */
-export interface CumulativeEntry {
   char: string;
-  positions: number[];         // All positional indices where this char appears
-  positionalWeights: number[]; // The ×4 weights at each position
-  cumulativeWeight: number;    // Sum of all positionalWeights
+  index: number;         // Step 1: 1-based position from right (1, 2, 3...)
+  step3Value: number;    // Step 2 & 3: index × 4
 }
 
-/** Step 4: Cross-product for one position */
-export interface CrossProduct {
+export interface Step4Entry {
   char: string;
   index: number;
-  positionalWeight: number;  // Step 2 value
-  cumulativeWeight: number;  // Step 3 value for this char
-  product: number;           // positionalWeight × cumulativeWeight
+  step3Value: number;
+  step4Value: number;    // Step 4: step3Value × step3Value
 }
 
-/** Full result across all 5 steps */
 export interface CalculationResultV2 {
   // Input
   original: string;
   normalized: string;
   letterCount: number;          // N
 
-  // Step 1+2
+  // Step 1, 2, 3
   letters: LetterEntry[];
 
-  // Step 3
-  cumulativeWeights: CumulativeEntry[];
-
   // Step 4
-  crossProducts: CrossProduct[];
-  grandTotal: number;           // Σ of all cross-products (exact integer)
+  step4Values: Step4Entry[];
 
   // Step 5
-  divisionResult: string;       // grandTotal / N — exact Decimal string (no rounding)
+  sumOfRoots: number;           // Σ of sqrt(step4Value)
+  divisionDecimal: string;      // sumOfRoots / N — exact Decimal string
+  divisionResult: string;       // Same as above
   reductionResult: ReductionResult; // Iterative digit-sum steps
   finalDigit: number;           // Single digit 0-9
 }
@@ -86,63 +59,38 @@ export function calculateV2(text: string): CalculationResultV2 {
   const normalized = normalizeArabicText(text); // already strips spaces
   const N = normalized.length;
 
-  // ── Step 1 + 2: Assign positional indices ──
-  // Index 1 = first character in the normalized string (string position 0).
-  // This matches the handwritten examples: for "بلال", ب gets index 1, then ل=2, ا=3, ل=4.
-  // (The Arabic text is stored LTR in memory; index 1 corresponds to the rightmost Arabic glyph
-  //  when rendered RTL, i.e. the start of the word as read in Arabic.)
+  // ── Step 1 + 2 + 3: Assign positional indices and multiply by 4 ──
   const letters: LetterEntry[] = [];
   for (let i = 0; i < N; i++) {
-    const index = i + 1;              // 1-based, left-to-right in string array
-    const positionalWeight = index * 4;
+    const index = i + 1;              // 1-based
+    const step3Value = index * 4;
     letters.push({
       char: normalized[i],
       index,
-      positionalWeight,
+      step3Value,
     });
   }
 
-  // ── Step 3: Cumulative character weights ──
-  // Group by unique char, sum their positional weights
-  const cumMap = new Map<string, CumulativeEntry>();
+  // ── Step 4: Square each value ──
+  const step4Values: Step4Entry[] = [];
   for (const entry of letters) {
-    if (!cumMap.has(entry.char)) {
-      cumMap.set(entry.char, {
-        char: entry.char,
-        positions: [],
-        positionalWeights: [],
-        cumulativeWeight: 0,
-      });
-    }
-    const cum = cumMap.get(entry.char)!;
-    cum.positions.push(entry.index);
-    cum.positionalWeights.push(entry.positionalWeight);
-    cum.cumulativeWeight += entry.positionalWeight;
-  }
-  const cumulativeWeights = Array.from(cumMap.values());
-
-  // ── Step 4: Cross multiplication & grand total ──
-  const crossProducts: CrossProduct[] = [];
-  let grandTotal = 0;
-
-  for (const entry of letters) {
-    const cumWeight = cumMap.get(entry.char)!.cumulativeWeight;
-    const product = entry.positionalWeight * cumWeight;
-    crossProducts.push({
-      char: entry.char,
-      index: entry.index,
-      positionalWeight: entry.positionalWeight,
-      cumulativeWeight: cumWeight,
-      product,
+    step4Values.push({
+      ...entry,
+      step4Value: entry.step3Value * entry.step3Value,
     });
-    grandTotal += product;
   }
 
-  // ── Step 5a: Scientific division — no rounding, full precision ──
-  const decGrandTotal = new Decimal(grandTotal);
+  // ── Step 5: Sum of roots, Division & Reduction ──
+  let sumOfRoots = new Decimal(0);
+  for (const entry of step4Values) {
+    const val = new Decimal(entry.step4Value);
+    sumOfRoots = sumOfRoots.plus(val.sqrt());
+  }
+
+  const sumOfRootsNum = sumOfRoots.toNumber();
   const decN = new Decimal(N);
-  const divisionDecimal = decGrandTotal.div(decN);
-  const divisionResult = divisionDecimal.toFixed(); // Full decimal string, no scientific notation
+  const divisionDecimal = sumOfRoots.div(decN);
+  const divisionResult = divisionDecimal.toFixed();
 
   // ── Step 5b: Digit root reduction of the division result ──
   const reductionResult = digitalRoot(divisionResult);
@@ -152,9 +100,9 @@ export function calculateV2(text: string): CalculationResultV2 {
     normalized,
     letterCount: N,
     letters,
-    cumulativeWeights,
-    crossProducts,
-    grandTotal,
+    step4Values,
+    sumOfRoots: sumOfRootsNum,
+    divisionDecimal: divisionResult,
     divisionResult,
     reductionResult,
     finalDigit: reductionResult.finalResult,

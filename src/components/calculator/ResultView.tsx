@@ -66,9 +66,8 @@ function StepHeader({
 export default function ResultView({ result }: ResultViewProps) {
   if (!result) return null;
 
-  // letters[0] has index=1 (first letter in reading order = rightmost in RTL display).
-  // Using natural array order inside dir="rtl" container gives correct visual display.
   const lettersDisplay = result.letters;
+  const step4Display = result.step4Values;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
@@ -123,13 +122,13 @@ export default function ResultView({ result }: ResultViewProps) {
       </Card>
 
       {/* ══════════════════════════════════════════════════════════
-          STEP 1+2: Positional Indices (×4)
+          STEP 1: Positional Indices
           ══════════════════════════════════════════════════════════ */}
       <div className="space-y-4">
         <StepHeader
           step={1}
-          title="الترقيم من اليمين إلى اليسار"
-          subtitle="كل حرف يأخذ رتبته (1، 2، 3…) بدءاً من اليمين"
+          title="تحديد القيم الأولية للحروف"
+          subtitle="يتم إسناد قيمة رقمية لكل حرف بناءً على ترتيبه"
         />
         <Card className="glass border-white/5 overflow-hidden">
           <CardContent className="p-6">
@@ -156,13 +155,13 @@ export default function ResultView({ result }: ResultViewProps) {
       </div>
 
       {/* ══════════════════════════════════════════════════════════
-          STEP 2: Positional Weight = Index × 4
+          STEP 2 & 3: Positional Weight = Index × 4
           ══════════════════════════════════════════════════════════ */}
       <div className="space-y-4">
         <StepHeader
           step={2}
-          title="الوزن الموقعي = الرتبة × 4"
-          subtitle="كل رتبة تُضرب في الثابت 4"
+          title="حساب قيم التغيير (تطبيق المعامل 🟧)"
+          subtitle="يتم ضرب القيمة الأولية في المعامل الثابت 4"
         />
         <Card className="glass border-white/5 overflow-hidden">
           <CardContent className="p-6">
@@ -179,7 +178,7 @@ export default function ResultView({ result }: ResultViewProps) {
                   </span>
                   {/* Weight */}
                   <span className="text-sm font-black text-violet-400" dir="ltr">
-                    {entry.positionalWeight}
+                    {entry.step3Value}
                   </span>
                 </div>
               ))}
@@ -189,91 +188,33 @@ export default function ResultView({ result }: ResultViewProps) {
       </div>
 
       {/* ══════════════════════════════════════════════════════════
-          STEP 3: Cumulative Character Weights
-          ══════════════════════════════════════════════════════════ */}
-      <div className="space-y-4">
-        <StepHeader
-          step={3}
-          title="الوزن التراكمي لكل حرف"
-          subtitle="مجموع الأوزان الموقعية (خطوة ٢) لكل مرة ظهر فيها الحرف"
-        />
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {result.cumulativeWeights.map((cum, idx) => (
-            <Card
-              key={idx}
-              className="glass border-white/5 hover:border-sky-500/30 transition-all duration-500 group relative overflow-hidden"
-            >
-              <div className="absolute inset-0 bg-sky-500/0 group-hover:bg-sky-500/5 transition-colors duration-500" />
-              <CardContent className="p-4 space-y-3 relative">
-                {/* Character */}
-                <div className="flex items-end justify-between">
-                  <span className="text-4xl font-black text-white group-hover:text-sky-300 transition-colors duration-300">
-                    {cum.char}
-                  </span>
-                  <span className="text-2xl font-black text-sky-400">{cum.cumulativeWeight}</span>
-                </div>
-                {/* Breakdown */}
-                <div className="pt-2 border-t border-white/5 space-y-1">
-                  <p className="text-[0.6rem] font-bold text-slate-500 uppercase tracking-wider">
-                    الأوزان الموقعية
-                  </p>
-                  <p className="text-xs font-mono text-slate-400" dir="ltr">
-                    {cum.positionalWeights.join(' + ')} = {cum.cumulativeWeight}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      {/* ══════════════════════════════════════════════════════════
-          STEP 4: Cross Multiplication & Grand Total
+          STEP 4: Square each value
           ══════════════════════════════════════════════════════════ */}
       <div className="space-y-4">
         <StepHeader
           step={4}
-          title="الضرب التقاطعي والمجموع الكلي"
-          subtitle="لكل موقع: الوزن الموقعي × الوزن التراكمي للحرف"
+          title="تربيع كل خانة 🔵"
+          subtitle="يتم ضرب كل قيمة مستخلصة من الخطوة ٣ في نفسها"
         />
         <Card className="glass border-white/5 overflow-hidden">
           <CardContent className="p-6">
-            {/* Cross products as equation */}
-            <div
-              className="flex flex-wrap justify-center items-center gap-x-3 gap-y-4 p-4 bg-white/[0.02] rounded-2xl border border-white/5"
-              dir="rtl"
-            >
-              {result.crossProducts.map((cp, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="flex flex-col items-center gap-1 group">
-                    <span className="text-[0.6rem] font-bold text-slate-500">
-                      {cp.char}
-                    </span>
-                    <div className="text-[0.6rem] text-slate-500 font-mono" dir="ltr">
-                      {cp.positionalWeight}×{cp.cumulativeWeight}
-                    </div>
-                    <div className="px-2.5 h-9 min-w-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm shadow-inner group-hover:scale-110 group-hover:border-amber-500/50 transition-all duration-300">
-                      {cp.product}
-                    </div>
+            <div className="flex flex-wrap justify-center gap-3" dir="rtl">
+              {step4Display.map((entry, i) => (
+                <div key={i} className="flex flex-col items-center gap-1.5 group">
+                  {/* Character */}
+                  <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xl font-black text-white group-hover:bg-amber-500/10 group-hover:border-amber-500/30 group-hover:text-amber-300 transition-all duration-300">
+                    {entry.char}
                   </div>
-                  {i < result.crossProducts.length - 1 && (
-                    <span className="text-slate-700 font-black text-base self-end pb-2">+</span>
-                  )}
+                  {/* Calculation */}
+                  <span className="text-[0.6rem] font-bold text-slate-500" dir="ltr">
+                    {entry.step3Value} × {entry.step3Value}
+                  </span>
+                  {/* Weight */}
+                  <span className="text-sm font-black text-amber-400" dir="ltr">
+                    {entry.step4Value}
+                  </span>
                 </div>
               ))}
-            </div>
-
-            {/* Grand Total */}
-            <div className="mt-6 flex flex-col items-center gap-2">
-              <div className="flex items-center gap-2">
-                <Sigma className="w-4 h-4 text-amber-400" />
-                <span className="text-[0.6rem] font-black text-slate-500 uppercase tracking-widest">
-                  المجموع الكلي
-                </span>
-              </div>
-              <div className="text-5xl font-black text-white bg-gradient-to-r from-amber-500/10 to-orange-500/10 px-8 py-3 rounded-2xl border border-amber-500/20 shadow-lg shadow-amber-500/5">
-                {result.grandTotal}
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -285,22 +226,43 @@ export default function ResultView({ result }: ResultViewProps) {
       <div className="space-y-4">
         <StepHeader
           step={5}
-          title="القسمة والاختزال الرقمي"
-          subtitle={`${result.grandTotal} ÷ ${result.letterCount} → اختزال متكرر حتى رقم واحد`}
+          title="الجذور والجمع والقسمة والتبسيط 🟡"
+          subtitle={`مجموع الجذور (${result.sumOfRoots}) ÷ عدد الحروف (${result.letterCount}) ثم التبسيط`}
         />
         <Card className="glass border-white/5 overflow-hidden">
           <CardContent className="p-6 space-y-6">
+            
+            {/* Square Roots and Sum */}
+            <div className="space-y-3 border-b border-white/5 pb-6">
+              <div className="flex items-center gap-2">
+                <Sigma className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                  جمع الجذور التربيعية 🟡
+                </span>
+              </div>
+              <div className="p-4 bg-white/[0.03] rounded-2xl border border-white/5 text-center flex flex-wrap items-center justify-center gap-2 text-slate-300 font-mono" dir="rtl">
+                 {step4Display.map((entry, idx) => (
+                   <span key={idx} className="flex items-center gap-2">
+                     <span>√{entry.step4Value}</span>
+                     {idx < step4Display.length - 1 && <span>+</span>}
+                   </span>
+                 ))}
+                 <span className="mx-2">=</span>
+                 <span className="text-amber-400 font-black text-xl">{result.sumOfRoots}</span>
+              </div>
+            </div>
+
             {/* Division */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Divide className="w-4 h-4 text-rose-400" />
                 <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
-                  القسمة الدقيقة (بدون تقريب)
+                  القسمة على عدد الحروف 🟡
                 </span>
               </div>
               <div className="p-4 bg-white/[0.03] rounded-2xl border border-white/5 text-center">
                 <span className="font-mono font-bold text-slate-300 text-lg" dir="ltr">
-                  {result.grandTotal} ÷ {result.letterCount} ={' '}
+                  {result.sumOfRoots} ÷ {result.letterCount} ={' '}
                   <span className="text-rose-300">{result.divisionResult}</span>
                 </span>
               </div>
@@ -311,7 +273,7 @@ export default function ResultView({ result }: ResultViewProps) {
               <div className="flex items-center gap-2">
                 <Hash className="w-4 h-4 text-rose-400" />
                 <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
-                  الاختزال الرقمي المزدوج
+                  التبسيط النهائي (الاختزال الرقمي)
                 </span>
               </div>
 
@@ -425,7 +387,7 @@ export default function ResultView({ result }: ResultViewProps) {
             {[
               { label: 'النص الأصلي', value: result.original, rtl: true, color: 'text-slate-300' },
               { label: 'عدد الحروف (N)', value: result.letterCount, color: 'text-emerald-400' },
-              { label: 'المجموع الكلي (خطوة ٤)', value: result.grandTotal, color: 'text-amber-400' },
+              { label: 'مجموع الجذور (خطوة ٥)', value: result.sumOfRoots, color: 'text-amber-400' },
               { label: 'ناتج القسمة', value: result.divisionResult, color: 'text-rose-300 font-mono text-xs' },
               { label: 'الرقم النهائي', value: result.reductionResult.displayResult, color: 'text-white font-black text-xl' },
             ].map((item, i) => (
