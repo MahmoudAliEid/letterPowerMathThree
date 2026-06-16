@@ -10,5 +10,6 @@ export {
   calculateV2 as calculateArabicPower,
   type CalculationResultV2 as CalculationResult,
   type LetterEntry,
-  type Step4Entry,
+  type CumulativeEntry,
+  type CrossProduct,
 } from './calculate_v2';

@@ -67,13 +67,14 @@ export default function ResultView({ result }: ResultViewProps) {
   if (!result) return null;
 
   const lettersDisplay = result.letters;
-  const step4Display = result.step4Values;
+  const cumulativeDisplay = result.cumulativeWeights;
+  const crossProductsDisplay = result.crossProducts;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
 
       {/* ══════════════════════════════════════════════════════════
-          HERO: Final Single Digit
+          HERO: Final Single/Double Digit Result
           ══════════════════════════════════════════════════════════ */}
       <Card className="glass overflow-hidden border-rose-500/20 shadow-[0_0_60px_rgba(244,63,94,0.12)] relative group">
         <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-rose-500/20 to-transparent blur-2xl pointer-events-none" />
@@ -155,13 +156,13 @@ export default function ResultView({ result }: ResultViewProps) {
       </div>
 
       {/* ══════════════════════════════════════════════════════════
-          STEP 2 & 3: Positional Weight = Index × 4
+          STEP 2: Positional Weight = Index × 4
           ══════════════════════════════════════════════════════════ */}
       <div className="space-y-4">
         <StepHeader
           step={2}
-          title="حساب قيم التغيير (تطبيق المعامل 🟧)"
-          subtitle="يتم ضرب القيمة الأولية في المعامل الثابت 4"
+          title="الوزن الموقعي = الرتبة × 4"
+          subtitle="كل رتبة تُضرب في الثابت 4"
         />
         <Card className="glass border-white/5 overflow-hidden">
           <CardContent className="p-6">
@@ -178,7 +179,7 @@ export default function ResultView({ result }: ResultViewProps) {
                   </span>
                   {/* Weight */}
                   <span className="text-sm font-black text-violet-400" dir="ltr">
-                    {entry.step3Value}
+                    {entry.positionalWeight}
                   </span>
                 </div>
               ))}
@@ -188,30 +189,69 @@ export default function ResultView({ result }: ResultViewProps) {
       </div>
 
       {/* ══════════════════════════════════════════════════════════
-          STEP 4: Square each value
+          STEP 3: Cumulative Character Weights
+          ══════════════════════════════════════════════════════════ */}
+      <div className="space-y-4">
+        <StepHeader
+          step={3}
+          title="الوزن التراكمي لكل حرف"
+          subtitle="مجموع الأوزان الموقعية (خطوة ٢) لكل مرة ظهر فيها الحرف"
+        />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {cumulativeDisplay.map((cum, idx) => (
+            <Card
+              key={idx}
+              className="glass border-white/5 hover:border-sky-500/30 transition-all duration-500 group relative overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-sky-500/0 group-hover:bg-sky-500/5 transition-colors duration-500" />
+              <CardContent className="p-4 space-y-3 relative">
+                {/* Character */}
+                <div className="flex items-end justify-between">
+                  <span className="text-4xl font-black text-white group-hover:text-sky-300 transition-colors duration-300">
+                    {cum.char}
+                  </span>
+                  <span className="text-2xl font-black text-sky-400">{cum.cumulativeWeight}</span>
+                </div>
+                {/* Breakdown */}
+                <div className="pt-2 border-t border-white/5 space-y-1">
+                  <p className="text-[0.6rem] font-bold text-slate-500 uppercase tracking-wider">
+                    الأوزان الموقعية
+                  </p>
+                  <p className="text-xs font-mono text-slate-400" dir="ltr">
+                    {cum.positionalWeights.join(' + ')} = {cum.cumulativeWeight}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════
+          STEP 4: Cross Multiplication (Positional × Cumulative)
           ══════════════════════════════════════════════════════════ */}
       <div className="space-y-4">
         <StepHeader
           step={4}
-          title="تربيع كل خانة 🔵"
-          subtitle="يتم ضرب كل قيمة مستخلصة من الخطوة ٣ في نفسها"
+          title="الضرب التقاطعي 🔵"
+          subtitle="لكل موقع: الوزن الموقعي × الوزن التراكمي للحرف"
         />
         <Card className="glass border-white/5 overflow-hidden">
           <CardContent className="p-6">
             <div className="flex flex-wrap justify-center gap-3" dir="rtl">
-              {step4Display.map((entry, i) => (
+              {crossProductsDisplay.map((cp, i) => (
                 <div key={i} className="flex flex-col items-center gap-1.5 group">
                   {/* Character */}
                   <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xl font-black text-white group-hover:bg-amber-500/10 group-hover:border-amber-500/30 group-hover:text-amber-300 transition-all duration-300">
-                    {entry.char}
+                    {cp.char}
                   </div>
                   {/* Calculation */}
                   <span className="text-[0.6rem] font-bold text-slate-500" dir="ltr">
-                    {entry.step3Value} × {entry.step3Value}
+                    {cp.positionalWeight} × {cp.cumulativeWeight}
                   </span>
-                  {/* Weight */}
+                  {/* Product */}
                   <span className="text-sm font-black text-amber-400" dir="ltr">
-                    {entry.step4Value}
+                    {cp.product}
                   </span>
                 </div>
               ))}
@@ -241,10 +281,10 @@ export default function ResultView({ result }: ResultViewProps) {
                 </span>
               </div>
               <div className="p-4 bg-white/[0.03] rounded-2xl border border-white/5 text-center flex flex-wrap items-center justify-center gap-2 text-slate-300 font-mono" dir="rtl">
-                 {step4Display.map((entry, idx) => (
+                 {crossProductsDisplay.map((cp, idx) => (
                    <span key={idx} className="flex items-center gap-2">
-                     <span>√{entry.step4Value}</span>
-                     {idx < step4Display.length - 1 && <span>+</span>}
+                     <span>√{cp.product}</span>
+                     {idx < crossProductsDisplay.length - 1 && <span>+</span>}
                    </span>
                  ))}
                  <span className="mx-2">=</span>
@@ -273,7 +313,7 @@ export default function ResultView({ result }: ResultViewProps) {
               <div className="flex items-center gap-2">
                 <Hash className="w-4 h-4 text-rose-400" />
                 <span className="text-xs font-black text-slate-500 uppercase tracking-widest">
-                  التبسيط النهائي (الاختزال الرقمي)
+                  التبسيط النهائي (الاختزال الرقمي المزدوج)
                 </span>
               </div>
 

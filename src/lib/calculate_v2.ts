@@ -11,35 +11,49 @@ Decimal.set({ precision: 100, rounding: Decimal.ROUND_HALF_UP });
 // Interfaces
 // ─────────────────────────────────────────────────────────────
 
+/** Step 1+2: Each letter with its positional index and weight */
 export interface LetterEntry {
-  char: string;
-  index: number;         // Step 1: 1-based position from right (1, 2, 3...)
-  step3Value: number;    // Step 2 & 3: index × 4
+  char: string;          // The normalized character
+  index: number;         // 1-based position from right
+  positionalWeight: number; // index × 4
 }
 
-export interface Step4Entry {
+/** Step 3: Cumulative weight for each unique character */
+export interface CumulativeEntry {
+  char: string;
+  positions: number[];         // All positional indices where this char appears
+  positionalWeights: number[]; // The ×4 weights at each position
+  cumulativeWeight: number;    // Sum of all positionalWeights
+}
+
+/** Step 4: Cross-product for one position */
+export interface CrossProduct {
   char: string;
   index: number;
-  step3Value: number;
-  step4Value: number;    // Step 4: step3Value × step3Value
+  positionalWeight: number;  // Step 2 value
+  cumulativeWeight: number;  // Step 3 value for this char
+  product: number;           // positionalWeight × cumulativeWeight
 }
 
+/** Full result across all 5 steps */
 export interface CalculationResultV2 {
   // Input
   original: string;
   normalized: string;
   letterCount: number;          // N
 
-  // Step 1, 2, 3
+  // Step 1+2
   letters: LetterEntry[];
 
+  // Step 3
+  cumulativeWeights: CumulativeEntry[];
+
   // Step 4
-  step4Values: Step4Entry[];
+  crossProducts: CrossProduct[];
 
   // Step 5
-  sumOfRoots: number;           // Σ of sqrt(step4Value)
-  divisionDecimal: string;      // sumOfRoots / N — exact Decimal string
-  divisionResult: string;       // Same as above
+  sumOfRoots: number;           // Σ of sqrt(product)
+  divisionResult: string;       // sumOfRoots / N — exact Decimal string
   reductionResult: ReductionResult; // Iterative digit-sum steps
   finalDigit: number;           // Single digit 0-9
 }
@@ -59,38 +73,68 @@ export function calculateV2(text: string): CalculationResultV2 {
   const normalized = normalizeArabicText(text); // already strips spaces
   const N = normalized.length;
 
-  // ── Step 1 + 2 + 3: Assign positional indices and multiply by 4 ──
+  // ── Step 1 + 2: Assign positional indices ──
   const letters: LetterEntry[] = [];
   for (let i = 0; i < N; i++) {
     const index = i + 1;              // 1-based
-    const step3Value = index * 4;
+    const positionalWeight = index * 4;
     letters.push({
       char: normalized[i],
       index,
-      step3Value,
+      positionalWeight,
     });
   }
 
-  // ── Step 4: Square each value ──
-  const step4Values: Step4Entry[] = [];
+  // ── Step 3: Cumulative character weights ──
+  // Group by unique char, sum their positional weights
+  const cumMap = new Map<string, CumulativeEntry>();
   for (const entry of letters) {
-    step4Values.push({
-      ...entry,
-      step4Value: entry.step3Value * entry.step3Value,
+    if (!cumMap.has(entry.char)) {
+      cumMap.set(entry.char, {
+        char: entry.char,
+        positions: [],
+        positionalWeights: [],
+        cumulativeWeight: 0,
+      });
+    }
+    const cum = cumMap.get(entry.char)!;
+    cum.positions.push(entry.index);
+    cum.positionalWeights.push(entry.positionalWeight);
+    cum.cumulativeWeight += entry.positionalWeight;
+  }
+  const cumulativeWeights = Array.from(cumMap.values());
+
+  // ── Step 4: Cross multiplication ──
+  const crossProducts: CrossProduct[] = [];
+  for (const entry of letters) {
+    const cumWeight = cumMap.get(entry.char)!.cumulativeWeight;
+    const product = entry.positionalWeight * cumWeight;
+    crossProducts.push({
+      char: entry.char,
+      index: entry.index,
+      positionalWeight: entry.positionalWeight,
+      cumulativeWeight: cumWeight,
+      product,
     });
   }
 
   // ── Step 5: Sum of roots, Division & Reduction ──
   let sumOfRoots = new Decimal(0);
-  for (const entry of step4Values) {
-    const val = new Decimal(entry.step4Value);
-    sumOfRoots = sumOfRoots.plus(val.sqrt());
+  for (const cp of crossProducts) {
+    const decProduct = new Decimal(cp.product);
+    sumOfRoots = sumOfRoots.plus(decProduct.sqrt());
   }
 
   const sumOfRootsNum = sumOfRoots.toNumber();
   const decN = new Decimal(N);
   const divisionDecimal = sumOfRoots.div(decN);
-  const divisionResult = divisionDecimal.toFixed();
+  
+  // Format the division result to exactly 8 decimal places as shown in the paper's math,
+  // then strip any trailing zeroes and trailing decimal point.
+  let divisionResult = divisionDecimal.toFixed(8);
+  if (divisionResult.indexOf('.') !== -1) {
+    divisionResult = divisionResult.replace(/0+$/, '').replace(/\.$/, '');
+  }
 
   // ── Step 5b: Digit root reduction of the division result ──
   const reductionResult = digitalRoot(divisionResult);
@@ -100,9 +144,9 @@ export function calculateV2(text: string): CalculationResultV2 {
     normalized,
     letterCount: N,
     letters,
-    step4Values,
+    cumulativeWeights,
+    crossProducts,
     sumOfRoots: sumOfRootsNum,
-    divisionDecimal: divisionResult,
     divisionResult,
     reductionResult,
     finalDigit: reductionResult.finalResult,

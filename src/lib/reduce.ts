@@ -1,12 +1,22 @@
-import Decimal from 'decimal.js';
+/**
+ * Reduction utilities — Step 5 String-based Paired Reduction.
+ *
+ * Algorithm (NO floating-point operations, pure string digit manipulation):
+ *
+ * 1. Split the division string at '.' → Integer_Segment, Fractional_Segment
+ * 2. Each round: sum digit characters of each segment independently.
+ * 3. If either resulting sum ≥ 10, convert it to a string and repeat from step 2.
+ * 4. Stop when BOTH sums are single digits (0–9).
+ * 5. Join with '.' → "X.Y" (or just "X" if no fractional segment).
+ */
 
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // Types
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface ReductionPair {
-  int: number;
-  frac: string | null; // Changed to string | null to preserve leading zeroes
+  int: number;        // Integer-segment sum for this round
+  frac: number | null; // Fractional-segment sum (null if no decimal part)
 }
 
 export interface ReductionResult {
@@ -18,72 +28,83 @@ export interface ReductionResult {
   steps: number[];
 }
 
-// ─────────────────────────────────────────────────────────────
-// Main digitalRoot function
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function sumDigitChars(s: string): number {
+  let total = 0;
+  for (const ch of s) {
+    const code = ch.charCodeAt(0) - 48; // '0'.charCodeAt(0) === 48
+    if (code >= 0 && code <= 9) total += code;
+  }
+  return total;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main export
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Paired digital-root reduction of a division result string.
  *
- * 1. Formats the division result to 2 decimal places (or 0 decimal places if it is a whole integer).
- * 2. Sums all the digits of the formatted number.
- * 3. Iteratively sums the digits of the resulting number until it becomes a single digit (0-9).
+ * Both integer and fractional segments are reduced simultaneously each round
+ * until each reaches a single digit (0–9).
  *
  * @param val - Exact division result string from Decimal.js
  */
 export function digitalRoot(val: string): ReductionResult {
-  const dec = new Decimal(val);
+  const dotIdx = val.indexOf('.');
+  const rawInt  = dotIdx === -1 ? val           : val.slice(0, dotIdx);
+  const rawFrac = dotIdx === -1 ? null          : val.slice(dotIdx + 1);
 
-  let fixedNumStr: string;
-  let initialInt: number;
-  let initialFrac: string | null = null;
+  // Strip anything that is not a decimal digit (sign, spaces, etc.)
+  let curInt  = rawInt.replace(/[^0-9]/g, '');
+  let curFrac = rawFrac !== null ? rawFrac.replace(/[^0-9]/g, '') : null;
 
-  if (dec.isInteger()) {
-    fixedNumStr = dec.toFixed(0);
-    initialInt = parseInt(fixedNumStr, 10);
-  } else {
-    fixedNumStr = dec.toFixed(2);
-    const p = fixedNumStr.split('.');
-    initialInt = parseInt(p[0], 10);
-    initialFrac = p[1] || null; // Preserved as string
-  }
+  // Guard: empty strings become '0'
+  if (curInt  === '') curInt  = '0';
+  if (curFrac === '') curFrac = null;
 
   const reductionSteps: ReductionPair[] = [];
 
-  // The first step shows the initial formatted number
-  reductionSteps.push({ int: initialInt, frac: initialFrac });
+  while (
+    sumDigitChars(curInt) > 9 ||
+    (curFrac !== null && sumDigitChars(curFrac) > 9)
+  ) {
+    const intSum  = sumDigitChars(curInt);
+    const fracSum = curFrac !== null ? sumDigitChars(curFrac) : null;
 
-  // Convert formatted string to individual digits (excluding the decimal point)
-  const currentDigits = fixedNumStr.replace('.', '').split('').map(Number);
-  let currentSum = currentDigits.reduce((a, b) => a + b, 0);
+    reductionSteps.push({ int: intSum, frac: fracSum });
 
-  // If the sum is different from the initial representation, add it as a step
-  if (fixedNumStr !== String(currentSum)) {
-    reductionSteps.push({ int: currentSum, frac: null });
+    curInt  = String(intSum);
+    curFrac = fracSum !== null ? String(fracSum) : null;
   }
 
-  // Iteratively reduce the sum until it's a single digit (<= 9)
-  while (currentSum > 9) {
-    const nextSum = String(currentSum).split('').map(Number).reduce((a, b) => a + b, 0);
-    reductionSteps.push({ int: nextSum, frac: null });
-    currentSum = nextSum;
-  }
+  const finalInt  = sumDigitChars(curInt);
+  const finalFrac = curFrac !== null ? sumDigitChars(curFrac) : null;
 
-  const finalDigit = currentSum;
+  const displayResult =
+    finalFrac !== null ? `${finalInt}.${finalFrac}` : `${finalInt}`;
+
+  const steps: number[] = reductionSteps.map(s => s.int);
+  if (steps.length === 0 || steps[steps.length - 1] > 9) {
+    steps.push(finalInt);
+  }
 
   return {
-    finalResult: finalDigit,
-    fracFinalResult: null,
-    displayResult: String(finalDigit),
-    decimalPart: '',
+    finalResult:     finalInt,
+    fracFinalResult: finalFrac,
+    displayResult,
+    decimalPart:     finalFrac !== null ? `.${finalFrac}` : '',
     reductionSteps,
-    steps: reductionSteps.map(s => s.int),
+    steps,
   };
 }
 
-// ─────────────────────────────────────────────────────────────
-// Utility functions
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function reduceToDigit(num: number): number {
   while (num > 9) {
